@@ -5,6 +5,7 @@ import shutil
 import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Optional
 
 import whisper
 from dotenv import load_dotenv
@@ -18,11 +19,25 @@ load_dotenv()
 
 logger = logging.getLogger(__name__)
 
+# Cache do modelo Whisper — carregado uma única vez na primeira chamada
+# para evitar recarregamento de ~1.4GB a cada pipeline
+_whisper_model: Optional[whisper.Whisper] = None
+
+
+def _get_whisper_model() -> whisper.Whisper:
+    """Retorna o modelo Whisper, carregando-o apenas na primeira chamada."""
+    global _whisper_model
+    if _whisper_model is None:
+        logger.info("Carregando modelo Whisper 'base' (pode levar alguns minutos na primeira vez)...")
+        _whisper_model = whisper.load_model("base")
+        logger.info("Modelo Whisper carregado e em cache.")
+    return _whisper_model
+
 _SCORE_LABELS = {
-    (0, 40): "Perfil precisa de restruturaÃ§Ã£o completa",
-    (41, 65): "Perfil com potencial, perdendo vendas por gaps no conteÃºdo",
-    (66, 85): "Perfil bom â ajustes pontuais fariam grande diferenÃ§a",
-    (86, 100): "Perfil bem otimizado â hora de escalar",
+    (0, 40): "Perfil precisa de restruturação completa",
+    (41, 65): "Perfil com potencial, perdendo vendas por gaps no conteúdo",
+    (66, 85): "Perfil bom — ajustes pontuais fariam grande diferença",
+    (86, 100): "Perfil bem otimizado — hora de escalar",
 }
 
 
@@ -30,7 +45,7 @@ def _calcular_score_label(total_score: float) -> str:
     for (low, high), label in _SCORE_LABELS.items():
         if low <= total_score <= high:
             return label
-    return "Perfil bem otimizado â hora de escalar"
+    return "Perfil bem otimizado — hora de escalar"
 
 
 def download_video(url: str, output_path: str) -> None:
@@ -50,23 +65,26 @@ def download_video(url: str, output_path: str) -> None:
         "--merge-output-format", "mp4",
         "--output", output_path,
         "--no-check-certificate",
-        "--quiet",
+        "--no-warnings",  # Menos verboso que padrão, mas não esconde erros críticos
         url,
     ]
 
     logger.info("Iniciando download do video: %s -> %s", url, output_path)
-    result = subprocess.run(command, capture_output=True, text=True, timeout=300)
+    result = subprocess.run(command, capture_output=True, text=True, timeout=600)  # 10 min
 
     if result.returncode != 0:
-        logger.error("yt-dlp falhou (codigo %d): %s", result.returncode, result.stderr)
+        stderr_msg = result.stderr[:1000] if result.stderr else "(sem saída de erro)"
+        stdout_msg = result.stdout[:500] if result.stdout else ""
+        logger.error("yt-dlp falhou (codigo %d):\nSTDERR: %s\nSTDOUT: %s", result.returncode, stderr_msg, stdout_msg)
         raise RuntimeError(
-            f"Falha no download do video. Codigo: {result.returncode}. Erro: {result.stderr[:500]}"
+            f"Falha no download do video. Codigo: {result.returncode}. Erro: {stderr_msg}"
         )
 
     if not Path(output_path).exists():
         raise RuntimeError(f"Download concluido mas arquivo nao encontrado em: {output_path}")
 
-    logger.info("Video baixado com sucesso: %s", output_path)
+    size_mb = Path(output_path).stat().st_size / (1024 * 1024)
+    logger.info("Video baixado com sucesso: %s (%.1f MB)", output_path, size_mb)
 
 
 def extract_audio(video_path: str, audio_path: str) -> None:
@@ -117,9 +135,9 @@ def transcribe_audio(audio_path: str) -> str:
     Raises:
         RuntimeError: Se a transcricao falhar.
     """
-    logger.info("Carregando modelo Whisper base para transcricao...")
+    logger.info("Obtendo modelo Whisper do cache...")
     try:
-        model = whisper.load_model("base")
+        model = _get_whisper_model()
         result = model.transcribe(audio_path, language="pt", fp16=False)
         text = result.get("text", "").strip()
 
@@ -143,12 +161,12 @@ def run_video_pipeline(
     shortcode: str,
     profile_score_data: dict,
 ) -> None:
-    """Pipeline completo: download â audio â transcriÃ§Ã£o â scoring â Supabase â AC â WhatsApp.
+    """Pipeline completo: download → audio → transcrição → scoring → Supabase → AC → WhatsApp.
 
     Executado em background pelo FastAPI BackgroundTasks.
 
     Args:
-        session_id: UUID da sessÃ£o criada no Supabase.
+        session_id: UUID da sessão criada no Supabase.
         username: Nome de usuario do Instagram.
         shortcode: Shortcode do reel (ex: "ABC123xyz").
         profile_score_data: Resultado do scorer.score_profile(), usado como contexto.
@@ -196,10 +214,10 @@ def run_video_pipeline(
         score_label = _calcular_score_label(total_score)
 
         nivel_alerta = video_score_data.get("nivel_alerta", "importante")
-        headline_diagnostico = video_score_data.get("headline_diagnostico", "Seu diagnÃ³stico estÃ¡ pronto")
+        headline_diagnostico = video_score_data.get("headline_diagnostico", "Seu diagnóstico está pronto")
 
         logger.info(
-            "[%s] Scores â perfil: %s/8, video_avg: %.1f/10, total: %.1f/100, nivel: %s",
+            "[%s] Scores — perfil: %s/8, video_avg: %.1f/10, total: %.1f/100, nivel: %s",
             session_id, profile_score, video_avg, total_score, nivel_alerta,
         )
 
@@ -226,7 +244,7 @@ def run_video_pipeline(
         lead_whatsapp = session_data.get("whatsapp", "")
         lead_name = session_data.get("lead_name", "")
 
-        # 9. Atualizar ActiveCampaign com resultado do diagnÃ³stico
+        # 9. Atualizar ActiveCampaign com resultado do diagnóstico
         if lead_email:
             report_data = {
                 "username": username,

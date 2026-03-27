@@ -1,5 +1,6 @@
 import logging
 import os
+import threading
 import uuid
 
 from dotenv import load_dotenv
@@ -28,29 +29,56 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# ââ FastAPI app âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+# ── FastAPI app ───────────────────────────────────────────────────────────────
 app = FastAPI(
     title="Diagnostico CM API",
     description="Backend para analise magnetica de perfis e videos do Instagram usando IA.",
     version="2.0.0",
 )
 
-# ââ CORS ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
-_raw_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:5173")
-allowed_origins = [origin.strip() for origin in _raw_origins.split(",") if origin.strip()]
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=allowed_origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+@app.on_event("startup")
+async def _preload_whisper():
+    """Pré-carrega o modelo Whisper em background no startup do servidor.
+    Assim a primeira análise de vídeo não precisa esperar o carregamento.
+    """
+    def _load():
+        try:
+            pipeline._get_whisper_model()
+            logger.info("Whisper pré-carregado com sucesso no startup.")
+        except Exception as e:
+            logger.warning("Falha ao pré-carregar Whisper no startup: %s", e)
 
-logger.info("CORS configurado para origens: %s", allowed_origins)
+    thread = threading.Thread(target=_load, daemon=True, name="whisper-preload")
+    thread.start()
+
+# ── CORS ──────────────────────────────────────────────────────────────────────
+_raw_origins = os.getenv("ALLOWED_ORIGINS", "*")
+_origins_list = [o.strip() for o in _raw_origins.split(",") if o.strip()]
+
+# allow_credentials=True é incompatível com allow_origins=["*"] no FastAPI.
+# Quando ALLOWED_ORIGINS=* (padrão), libera tudo sem credentials.
+if _origins_list == ["*"]:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=False,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+else:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=_origins_list,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
+logger.info("CORS configurado para origens: %s", _origins_list)
 
 
-# ââ Rotas âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+# ── Rotas ─────────────────────────────────────────────────────────────────────
 
 @app.get("/health", tags=["Status"])
 async def health_check():
@@ -99,7 +127,7 @@ async def get_posts(username: str):
 
 @app.post("/analyze/video", status_code=202, tags=["Analise"])
 async def analyze_video(request: VideoAnalyzeRequest, background_tasks: BackgroundTasks):
-    """Inicia anÃ¡lise completa de um reel em background. Retorna session_id para polling."""
+    """Inicia análise completa de um reel em background. Retorna session_id para polling."""
     logger.info(
         "Requisicao de analise de video: @%s shortcode=%s",
         request.username, request.shortcode,
@@ -187,7 +215,7 @@ async def save_contact(request: SaveContactRequest):
 
 @app.post("/save/quiz", tags=["Quiz"])
 async def save_quiz(request: SaveQuizRequest):
-    """Salva respostas do quiz associadas Ã  sessÃ£o."""
+    """Salva respostas do quiz associadas à sessão."""
     logger.info("Salvando quiz para session_id=%s (%d respostas)", request.session_id, len(request.answers))
     try:
         supabase_client.save_quiz_answers(request.session_id, request.answers)
@@ -214,7 +242,7 @@ async def save_email(request: SaveEmailRequest):
         raise HTTPException(status_code=500, detail=f"Erro ao salvar email: {str(e)}")
 
 
-# ââ Entrypoint ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+# ── Entrypoint ────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     import uvicorn
 

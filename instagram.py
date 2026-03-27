@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 from fastapi import HTTPException
 
 load_dotenv()
+
 logger = logging.getLogger(__name__)
 
 APIFY_API_TOKEN = os.getenv("APIFY_API_TOKEN")
@@ -116,25 +117,110 @@ def get_profile(username: str) -> dict:
 
     profile = items[0]
 
+    # Log completo para debug — ajuda a identificar nomes de campos do Apify
+    logger.info("Apify raw profile keys: %s", list(profile.keys()))
+    logger.debug("Apify raw profile: %s", profile)
+
     # Verificar se o perfil e privado
-    if profile.get("private", False) or profile.get("is_private", False):
+    if profile.get("private", False) or profile.get("is_private", False) or profile.get("isPrivate", False):
         raise HTTPException(
             status_code=403,
             detail=f"O perfil @{username} e privado e nao pode ser analisado.",
         )
 
-    return {
-        "username": profile.get("username") or username,
-        "full_name": profile.get("fullName") or profile.get("full_name", ""),
-        "biography": profile.get("biography") or profile.get("bio", ""),
-        "followers": profile.get("followersCount") or profile.get("followers", 0),
-        "following": profile.get("followsCount") or profile.get("following", 0),
-        "posts_count": profile.get("postsCount") or profile.get("posts_count") or profile.get("mediacount", 0),
-        "profile_pic_url": profile.get("profilePicUrl") or profile.get("profile_pic_url", ""),
-        "external_url": profile.get("externalUrl") or profile.get("external_url", ""),
-        "highlights_count": 0,
+    # Extração defensiva com múltiplos fallbacks para cada campo
+    # (Apify pode mudar os nomes dos campos entre versões do actor)
+    def _first(*values, default=""):
+        """Retorna o primeiro valor não-vazio da lista."""
+        for v in values:
+            if v:
+                return v
+        return default
+
+    def _first_int(*values, default=0):
+        """Retorna o primeiro valor inteiro não-zero da lista."""
+        for v in values:
+            if v:
+                try:
+                    return int(v)
+                except (TypeError, ValueError):
+                    continue
+        return default
+
+    bio = _first(
+        profile.get("biography"),
+        profile.get("bio"),
+        profile.get("description"),
+        profile.get("bioText"),
+    )
+
+    pic_url = _first(
+        profile.get("profilePicUrlHD"),
+        profile.get("profilePicUrl"),
+        profile.get("profile_pic_url"),
+        profile.get("profilePicture"),
+        profile.get("profileImage"),
+        profile.get("picture"),
+    )
+
+    full_name = _first(
+        profile.get("fullName"),
+        profile.get("full_name"),
+        profile.get("name"),
+    )
+
+    external_url = _first(
+        profile.get("externalUrl"),
+        profile.get("external_url"),
+        profile.get("website"),
+        profile.get("websiteUrl"),
+    )
+
+    followers = _first_int(
+        profile.get("followersCount"),
+        profile.get("followers"),
+        profile.get("edge_followed_by", {}).get("count") if isinstance(profile.get("edge_followed_by"), dict) else None,
+    )
+
+    following = _first_int(
+        profile.get("followsCount"),
+        profile.get("following"),
+        profile.get("followingCount"),
+        profile.get("edge_follow", {}).get("count") if isinstance(profile.get("edge_follow"), dict) else None,
+    )
+
+    posts_count = _first_int(
+        profile.get("postsCount"),
+        profile.get("posts_count"),
+        profile.get("mediaCount"),
+        profile.get("mediacount"),
+        profile.get("edge_owner_to_timeline_media", {}).get("count") if isinstance(profile.get("edge_owner_to_timeline_media"), dict) else None,
+    )
+
+    highlights_count = _first_int(
+        profile.get("highlightsCount"),
+        profile.get("highlights_count"),
+    )
+
+    result = {
+        "username": _first(profile.get("username"), default=username),
+        "full_name": full_name,
+        "biography": bio,
+        "followers": followers,
+        "following": following,
+        "posts_count": posts_count,
+        "profile_pic_url": pic_url,
+        "external_url": external_url,
+        "highlights_count": highlights_count,
         "is_private": False,
     }
+
+    logger.info(
+        "Perfil extraido — @%s | bio=%s chars | pic_url=%s | followers=%d",
+        result["username"], len(bio), bool(pic_url), followers,
+    )
+
+    return result
 
 
 def get_posts(username: str) -> list:
@@ -163,7 +249,7 @@ def get_posts(username: str) -> list:
         actor_id="apify~instagram-post-scraper",
         input_data={
             "directUrls": [f"https://www.instagram.com/{username}/"],
-            "resultsLi~it": 9,
+            "resultsLimit": 9,
         },
     )
 
