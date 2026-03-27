@@ -7,7 +7,6 @@ from dotenv import load_dotenv
 from fastapi import HTTPException
 
 load_dotenv()
-
 logger = logging.getLogger(__name__)
 
 APIFY_API_TOKEN = os.getenv("APIFY_API_TOKEN")
@@ -102,7 +101,7 @@ def get_profile(username: str) -> dict:
     logger.info("Buscando perfil @%s via Apify", username)
 
     items = _apify_run_sync(
-        actor_id="apify/instagram-profile-scraper",
+        actor_id="apify~instagram-profile-scraper",
         input_data={
             "usernames": [username],
             "resultsLimit": 1,
@@ -161,10 +160,10 @@ def get_posts(username: str) -> list:
     logger.info("Buscando posts de @%s via Apify", username)
 
     items = _apify_run_sync(
-        actor_id="apify/instagram-post-scraper",
+        actor_id="apify~instagram-post-scraper",
         input_data={
             "directUrls": [f"https://www.instagram.com/{username}/"],
-            "resultsLimit": 9,
+            "resultsLi~it": 9,
         },
     )
 
