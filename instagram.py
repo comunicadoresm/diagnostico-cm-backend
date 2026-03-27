@@ -56,10 +56,11 @@ def _apify_run_sync(actor_id: str, input_data: dict) -> list:
                 detail="Limite do plano Apify atingido. Verifique sua conta em apify.com.",
             )
         if response.status_code not in (200, 201):
-            logger.error("Apify retornou status %d: %s", response.status_code, response.text[:500])
+            apify_error = response.text[:500]
+            logger.error("Apify retornou status %d: %s", response.status_code, apify_error)
             raise HTTPException(
                 status_code=502,
-                detail=f"Erro ao chamar Apify (status {response.status_code}).",
+                detail=f"Erro ao chamar Apify (status {response.status_code}): {apify_error}",
             )
 
         return response.json()
