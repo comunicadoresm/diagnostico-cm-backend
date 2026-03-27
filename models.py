@@ -16,6 +16,7 @@ class VideoAnalyzeRequest(BaseModel):
     username: str
     shortcode: str
     profile_score_data: dict
+    video_url: Optional[str] = None  # URL direta do CDN (evita yt-dlp)
 
 
 class SaveEmailRequest(BaseModel):

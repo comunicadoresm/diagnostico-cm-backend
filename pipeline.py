@@ -7,6 +7,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
+import httpx
+
 import whisper
 from dotenv import load_dotenv
 
@@ -48,8 +50,39 @@ def _calcular_score_label(total_score: float) -> str:
     return "Perfil bem otimizado — hora de escalar"
 
 
+def download_video_direct(url: str, output_path: str) -> None:
+    """Baixa vídeo diretamente de uma URL CDN via httpx (sem yt-dlp).
+    Usado quando o frontend já passou a video_url do Apify.
+
+    Args:
+        url: URL direta do CDN (ex: scontent-*.cdninstagram.com/...).
+        output_path: Caminho onde salvar o arquivo.
+
+    Raises:
+        RuntimeError: Se o download falhar.
+    """
+    logger.info("Download direto via httpx: %s -> %s", url[:80], output_path)
+    headers = {
+        "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15",
+        "Referer": "https://www.instagram.com/",
+    }
+    with httpx.Client(timeout=120, follow_redirects=True) as client:
+        with client.stream("GET", url, headers=headers) as response:
+            if response.status_code != 200:
+                raise RuntimeError(f"Download CDN falhou com status {response.status_code}")
+            with open(output_path, "wb") as f:
+                for chunk in response.iter_bytes(chunk_size=1024 * 1024):
+                    f.write(chunk)
+
+    if not Path(output_path).exists():
+        raise RuntimeError(f"Download concluido mas arquivo nao encontrado em: {output_path}")
+
+    size_mb = Path(output_path).stat().st_size / (1024 * 1024)
+    logger.info("Video baixado com sucesso: %s (%.1f MB)", output_path, size_mb)
+
+
 def download_video(url: str, output_path: str) -> None:
-    """Baixa o video do Instagram usando yt-dlp.
+    """Baixa o video do Instagram usando yt-dlp (fallback quando não há video_url direto).
 
     Args:
         url: URL do reel do Instagram.
@@ -65,12 +98,12 @@ def download_video(url: str, output_path: str) -> None:
         "--merge-output-format", "mp4",
         "--output", output_path,
         "--no-check-certificate",
-        "--no-warnings",  # Menos verboso que padrão, mas não esconde erros críticos
+        "--no-warnings",
         url,
     ]
 
-    logger.info("Iniciando download do video: %s -> %s", url, output_path)
-    result = subprocess.run(command, capture_output=True, text=True, timeout=600)  # 10 min
+    logger.info("Iniciando download via yt-dlp: %s -> %s", url, output_path)
+    result = subprocess.run(command, capture_output=True, text=True, timeout=600)
 
     if result.returncode != 0:
         stderr_msg = result.stderr[:1000] if result.stderr else "(sem saída de erro)"
@@ -160,6 +193,7 @@ def run_video_pipeline(
     username: str,
     shortcode: str,
     profile_score_data: dict,
+    video_url: Optional[str] = None,
 ) -> None:
     """Pipeline completo: download → audio → transcrição → scoring → Supabase → AC → WhatsApp.
 
@@ -183,9 +217,14 @@ def run_video_pipeline(
         reel_url = f"https://www.instagram.com/reel/{shortcode}/"
         logger.info("[%s] URL do reel: %s", session_id, reel_url)
 
-        # 2. Baixar video
+        # 2. Baixar video (preferência: URL direta do CDN, fallback: yt-dlp)
         supabase_client.update_status_detail(session_id, "baixando_video")
-        download_video(reel_url, video_path)
+        if video_url:
+            logger.info("[%s] Usando URL direta do CDN para download.", session_id)
+            download_video_direct(video_url, video_path)
+        else:
+            logger.info("[%s] Usando yt-dlp para download (sem video_url).", session_id)
+            download_video(reel_url, video_path)
 
         # 3. Extrair audio
         supabase_client.update_status_detail(session_id, "extraindo_audio")

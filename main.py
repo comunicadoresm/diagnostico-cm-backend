@@ -142,6 +142,7 @@ async def analyze_video(request: VideoAnalyzeRequest, background_tasks: Backgrou
             username=request.username,
             shortcode=request.shortcode,
             profile_score_data=request.profile_score_data,
+            video_url=request.video_url,
         )
 
         return {"session_id": session_id, "status": "processing"}
