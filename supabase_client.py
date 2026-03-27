@@ -55,8 +55,18 @@ def update_session(session_id: str, data: dict):
     return response.data
 
 
+def update_status_detail(session_id: str, detail: str) -> None:
+    """Atualiza status_detail de forma segura — falhas são apenas logadas, nunca propagadas.
+    Usado para progresso informativo durante o pipeline.
+    """
+    try:
+        update_session(session_id, {"status_detail": detail})
+    except Exception as e:
+        logger.warning("[%s] Falha ao atualizar status_detail='%s': %s", session_id, detail, e)
+
+
 def get_session(session_id: str) -> dict:
-    """Busca registro na tabela diagnostic_sessions pelo id. Retorna dict ou lanÃ§a erro."""
+    """Busca registro na tabela diagnostic_sessions pelo id. Retorna dict ou lança erro."""
     client = get_client()
     response = client.table(TABLE).select("*").eq("id", session_id).execute()
 
@@ -83,7 +93,7 @@ def save_quiz_answers(session_id: str, answers: list[dict]) -> None:
     """Salva respostas do quiz na tabela quiz_answers.
 
     Args:
-        session_id: UUID da sessÃ£o.
+        session_id: UUID da sessão.
         answers: Lista de dicts com question_id e answer.
     """
     client = get_client()

@@ -184,20 +184,20 @@ def run_video_pipeline(
         logger.info("[%s] URL do reel: %s", session_id, reel_url)
 
         # 2. Baixar video
-        supabase_client.update_session(session_id, {"status_detail": "baixando_video"})
+        supabase_client.update_status_detail(session_id, "baixando_video")
         download_video(reel_url, video_path)
 
         # 3. Extrair audio
-        supabase_client.update_session(session_id, {"status_detail": "extraindo_audio"})
+        supabase_client.update_status_detail(session_id, "extraindo_audio")
         extract_audio(video_path, audio_path)
 
         # 4. Transcrever
-        supabase_client.update_session(session_id, {"status_detail": "transcrevendo"})
+        supabase_client.update_status_detail(session_id, "transcrevendo")
         transcricao = transcribe_audio(audio_path)
         logger.info("[%s] Transcricao: %s...", session_id, transcricao[:100])
 
         # 5. Score do video (metodologia IDF GB)
-        supabase_client.update_session(session_id, {"status_detail": "calculando_score"})
+        supabase_client.update_status_detail(session_id, "calculando_score")
         video_score_data = scorer.score_video(transcricao, profile_score_data)
 
         # 6. Score total ponderado: perfil 40% + video 60%
@@ -290,15 +290,16 @@ def run_video_pipeline(
     except Exception as e:
         logger.error("[%s] Erro no pipeline: %s", session_id, e, exc_info=True)
         try:
+            # Atualiza apenas colunas que existem na schema base (status + completed_at)
             supabase_client.update_session(
                 session_id,
                 {
                     "status": "error",
-                    "status_detail": "erro_no_pipeline",
-                    "error_message": str(e)[:1000],
                     "completed_at": datetime.now(timezone.utc).isoformat(),
                 },
             )
+            # Campos opcionais atualizados separadamente (tolerante a falha)
+            supabase_client.update_status_detail(session_id, "erro_no_pipeline")
         except Exception as supabase_err:
             logger.error(
                 "[%s] Falha adicional ao registrar erro no Supabase: %s",
