@@ -156,26 +156,27 @@ def extract_audio(video_path: str, audio_path: str) -> None:
     logger.info("Audio extraido com sucesso: %s", audio_path)
 
 
-def transcribe_audio(audio_path: str) -> str:
-    """Transcreve o audio usando o modelo Whisper base.
+def transcribe_audio(media_path: str) -> str:
+    """Transcreve mídia (vídeo ou áudio) usando o modelo Whisper tiny.
+    Whisper lida internamente com extração de áudio via ffmpeg.
 
     Args:
-        audio_path: Caminho do arquivo de audio .wav.
+        media_path: Caminho do arquivo de vídeo (.mp4) ou áudio (.wav).
 
     Returns:
         Texto transcrito.
 
     Raises:
-        RuntimeError: Se a transcricao falhar.
+        RuntimeError: Se a transcrição falhar.
     """
     logger.info("Obtendo modelo Whisper do cache (tiny)...")
     try:
         model = _get_whisper_model()
-        result = model.transcribe(audio_path, language="pt", fp16=False, beam_size=1)
+        result = model.transcribe(media_path, language="pt", fp16=False, beam_size=1)
         text = result.get("text", "").strip()
 
         if not text:
-            logger.warning("Whisper retornou transcricao vazia para: %s", audio_path)
+            logger.warning("Whisper retornou transcricao vazia para: %s", media_path)
             raise RuntimeError("Transcricao resultou em texto vazio. O video pode nao ter audio falado.")
 
         logger.info("Transcricao concluida: %d caracteres", len(text))
@@ -207,7 +208,6 @@ def run_video_pipeline(
     """
     tmp_dir = Path(f"/tmp/{session_id}")
     video_path = str(tmp_dir / "video.mp4")
-    audio_path = str(tmp_dir / "audio.wav")
 
     try:
         tmp_dir.mkdir(parents=True, exist_ok=True)
@@ -226,13 +226,10 @@ def run_video_pipeline(
             logger.info("[%s] Usando yt-dlp para download (sem video_url).", session_id)
             download_video(reel_url, video_path)
 
-        # 3. Extrair audio
-        supabase_client.update_status_detail(session_id, "extraindo_audio")
-        extract_audio(video_path, audio_path)
-
-        # 4. Transcrever
+        # 3. Transcrever diretamente do vídeo (Whisper lida com ffmpeg internamente)
+        # Skip da extração de áudio explícita via ffmpeg para evitar travamento no Railway
         supabase_client.update_status_detail(session_id, "transcrevendo")
-        transcricao = transcribe_audio(audio_path)
+        transcricao = transcribe_audio(video_path)
         logger.info("[%s] Transcricao: %s...", session_id, transcricao[:100])
 
         # 5. Score do video (metodologia IDF GB)
