@@ -2,7 +2,7 @@
 nixPkgsAppend = ["ffmpeg", "gcc", "rustc", "cargo"]
 
 [phases.install]
-cmds = ["python -m venv --copies /opt/venv && . /opt/venv/bin/activate && pip install --upgrade pip setuptools wheel numpy && pip install --no-build-isolation openai-whisper==20231117 && pip install -r requirements.txt"]
+cmds = ["python -m venv --copies /opt/venv && . /opt/venv/bin/activate && pip install --upgrade pip 'setuptools<70' wheel numpy && pip install --no-build-isolation openai-whisper==20231117 && pip install -r requirements.txt"]
 
 [start]
 cmd = "uvicorn main:app --host 0.0.0.0 --port $PORT"
