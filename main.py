@@ -1,6 +1,5 @@
 import logging
 import os
-import threading
 import uuid
 
 from dotenv import load_dotenv
@@ -36,21 +35,6 @@ app = FastAPI(
     version="2.0.0",
 )
 
-
-@app.on_event("startup")
-async def _preload_whisper():
-    """Pré-carrega o modelo Whisper em background no startup do servidor.
-    Assim a primeira análise de vídeo não precisa esperar o carregamento.
-    """
-    def _load():
-        try:
-            pipeline._get_whisper_model()
-            logger.info("Whisper pré-carregado com sucesso no startup.")
-        except Exception as e:
-            logger.warning("Falha ao pré-carregar Whisper no startup: %s", e)
-
-    thread = threading.Thread(target=_load, daemon=True, name="whisper-preload")
-    thread.start()
 
 # ── CORS ──────────────────────────────────────────────────────────────────────
 _raw_origins = os.getenv("ALLOWED_ORIGINS", "*")
