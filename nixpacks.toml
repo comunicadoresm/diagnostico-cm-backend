@@ -1,0 +1,8 @@
+[phases.setup]
+nixPkgsAppend = ["ffmpeg", "gcc", "rustc", "cargo"]
+
+[phases.install]
+cmds = ["python -m venv --copies /opt/venv && . /opt/venv/bin/activate && pip install --no-cache-dir --upgrade pip 'setuptools<70' wheel numpy && pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu && pip install --no-cache-dir --no-build-isolation openai-whisper==20231117 && pip install --no-cache-dir -r requirements.txt"]
+
+[start]
+cmd = "uvicorn main:app --host 0.0.0.0 --port $PORT"
