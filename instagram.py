@@ -246,9 +246,10 @@ def get_posts(username: str) -> list:
     logger.info("Buscando posts de @%s via Apify", username)
 
     items = _apify_run_sync(
-        actor_id="apify~instagram-post-scraper",
+        actor_id="apify~instagram-scraper",
         input_data={
             "directUrls": [f"https://www.instagram.com/{username}/"],
+            "resultsType": "posts",
             "resultsLimit": 9,
         },
     )
