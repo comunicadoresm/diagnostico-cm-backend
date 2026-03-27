@@ -30,9 +30,9 @@ def _get_whisper_model() -> whisper.Whisper:
     """Retorna o modelo Whisper, carregando-o apenas na primeira chamada."""
     global _whisper_model
     if _whisper_model is None:
-        logger.info("Carregando modelo Whisper 'base' (pode levar alguns minutos na primeira vez)...")
-        _whisper_model = whisper.load_model("base")
-        logger.info("Modelo Whisper carregado e em cache.")
+        logger.info("Carregando modelo Whisper 'tiny' (~150MB, adequado para Railway free tier)...")
+        _whisper_model = whisper.load_model("tiny")
+        logger.info("Modelo Whisper 'tiny' carregado e em cache.")
     return _whisper_model
 
 _SCORE_LABELS = {
@@ -168,10 +168,10 @@ def transcribe_audio(audio_path: str) -> str:
     Raises:
         RuntimeError: Se a transcricao falhar.
     """
-    logger.info("Obtendo modelo Whisper do cache...")
+    logger.info("Obtendo modelo Whisper do cache (tiny)...")
     try:
         model = _get_whisper_model()
-        result = model.transcribe(audio_path, language="pt", fp16=False)
+        result = model.transcribe(audio_path, language="pt", fp16=False, beam_size=1)
         text = result.get("text", "").strip()
 
         if not text:
