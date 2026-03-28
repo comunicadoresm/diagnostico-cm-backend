@@ -8,8 +8,7 @@ from pathlib import Path
 from typing import Optional
 
 import httpx
-
-import whisper
+from groq import Groq
 from dotenv import load_dotenv
 
 import activecampaign
@@ -21,19 +20,6 @@ load_dotenv()
 
 logger = logging.getLogger(__name__)
 
-# Cache do modelo Whisper — carregado uma única vez na primeira chamada
-# para evitar recarregamento de ~1.4GB a cada pipeline
-_whisper_model: Optional[whisper.Whisper] = None
-
-
-def _get_whisper_model() -> whisper.Whisper:
-    """Retorna o modelo Whisper, carregando-o apenas na primeira chamada."""
-    global _whisper_model
-    if _whisper_model is None:
-        logger.info("Carregando modelo Whisper 'tiny' (~150MB, adequado para Railway free tier)...")
-        _whisper_model = whisper.load_model("tiny")
-        logger.info("Modelo Whisper 'tiny' carregado e em cache.")
-    return _whisper_model
 
 _SCORE_LABELS = {
     (0, 40): "Perfil precisa de restruturação completa",
@@ -157,8 +143,7 @@ def extract_audio(video_path: str, audio_path: str) -> None:
 
 
 def transcribe_audio(media_path: str) -> str:
-    """Transcreve mídia (vídeo ou áudio) usando o modelo Whisper tiny.
-    Whisper lida internamente com extração de áudio via ffmpeg.
+    """Transcreve mídia via Groq Whisper large-v3 (API remota, sem RAM local).
 
     Args:
         media_path: Caminho do arquivo de vídeo (.mp4) ou áudio (.wav).
@@ -169,24 +154,43 @@ def transcribe_audio(media_path: str) -> str:
     Raises:
         RuntimeError: Se a transcrição falhar.
     """
-    logger.info("Obtendo modelo Whisper do cache (tiny)...")
+    api_key = os.getenv("GROQ_API_KEY")
+    if not api_key:
+        raise RuntimeError("GROQ_API_KEY não configurado nas variáveis de ambiente.")
+
+    file_size_mb = Path(media_path).stat().st_size / (1024 * 1024)
+    logger.info("Transcrevendo via Groq Whisper large-v3: %.1f MB", file_size_mb)
+
+    # Groq limite: 25MB. Se o vídeo for maior, extrai áudio WAV antes.
+    transcribe_path = media_path
+    if file_size_mb > 24:
+        audio_path = str(Path(media_path).with_suffix(".wav"))
+        extract_audio(media_path, audio_path)
+        transcribe_path = audio_path
+
     try:
-        model = _get_whisper_model()
-        result = model.transcribe(media_path, language="pt", fp16=False, beam_size=1)
-        text = result.get("text", "").strip()
+        client = Groq(api_key=api_key)
+        with open(transcribe_path, "rb") as f:
+            result = client.audio.transcriptions.create(
+                model="whisper-large-v3",
+                file=f,
+                language="pt",
+                response_format="text",
+            )
+
+        text = result.strip() if isinstance(result, str) else result.text.strip()
 
         if not text:
-            logger.warning("Whisper retornou transcricao vazia para: %s", media_path)
             raise RuntimeError("Transcricao resultou em texto vazio. O video pode nao ter audio falado.")
 
-        logger.info("Transcricao concluida: %d caracteres", len(text))
+        logger.info("Transcricao concluida via Groq: %d caracteres", len(text))
         return text
 
+    except RuntimeError:
+        raise
     except Exception as e:
-        if isinstance(e, RuntimeError):
-            raise
-        logger.error("Erro ao transcrever audio: %s", e, exc_info=True)
-        raise RuntimeError(f"Falha na transcricao com Whisper: {str(e)}")
+        logger.error("Erro ao transcrever via Groq: %s", e, exc_info=True)
+        raise RuntimeError(f"Falha na transcricao com Groq Whisper: {str(e)}")
 
 
 def run_video_pipeline(
