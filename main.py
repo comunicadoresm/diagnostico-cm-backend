@@ -69,6 +69,14 @@ async def health_check():
     return {"status": "ok", "version": "groq-v2"}
 
 
+@app.post("/debug/score-video", tags=["Status"])
+def debug_score_video(request: dict):
+    """Testa score_video diretamente — remover após diagnóstico."""
+    transcricao = request.get("transcricao", "Teste de transcrição mínima.")
+    result = scorer.score_video(transcricao, {})
+    return result
+
+
 @app.get("/debug/groq", tags=["Status"])
 def debug_groq():
     """Testa conectividade com Groq API — remover após diagnóstico."""
