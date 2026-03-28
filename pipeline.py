@@ -269,7 +269,7 @@ def run_video_pipeline(
             "status_detail": "concluido",
             "completed_at": now,
             "profile_score": profile_score_data,
-            "video_scores": video_score_data,
+            "video_analysis": video_score_data,
             "total_score": int(total_score),
             "score_label": score_label,
             "nivel_alerta": nivel_alerta,
