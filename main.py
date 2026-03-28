@@ -66,7 +66,7 @@ logger.info("CORS configurado para origens: %s", _origins_list)
 
 @app.get("/health", tags=["Status"])
 async def health_check():
-    return {"status": "ok"}
+    return {"status": "ok", "version": "groq-v2"}
 
 
 @app.get("/debug/groq", tags=["Status"])
