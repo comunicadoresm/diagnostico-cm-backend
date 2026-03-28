@@ -158,23 +158,23 @@ def transcribe_audio(media_path: str) -> str:
     if not api_key:
         raise RuntimeError("GROQ_API_KEY não configurado nas variáveis de ambiente.")
 
-    # Sempre extrai WAV antes de enviar ao Groq:
-    # - arquivo menor (~1-2MB vs 5-10MB do mp4)
-    # - formato sem ambiguidade (Groq reconhece melhor)
-    # - upload mais rápido pelo Railway
-    audio_path = str(Path(media_path).with_suffix(".wav"))
-    logger.info("Extraindo audio WAV para envio ao Groq...")
-    extract_audio(media_path, audio_path)
+    # Envia o mp4 diretamente ao Groq — sem ffmpeg, sem risco de OOM.
+    # Groq aceita mp4 até 25MB. Reels do Instagram tipicamente ficam abaixo disso.
+    file_size_mb = Path(media_path).stat().st_size / (1024 * 1024)
+    logger.info("Enviando %.1f MB ao Groq Whisper large-v3 (mp4 direto, sem ffmpeg)...", file_size_mb)
 
-    wav_size_mb = Path(audio_path).stat().st_size / (1024 * 1024)
-    logger.info("Enviando %.1f MB ao Groq Whisper large-v3...", wav_size_mb)
+    if file_size_mb > 24:
+        raise RuntimeError(
+            f"Arquivo muito grande para Groq ({file_size_mb:.1f}MB > 25MB). "
+            "Considere usar um reel mais curto."
+        )
 
     try:
         client = Groq(api_key=api_key, timeout=120.0)
-        with open(audio_path, "rb") as f:
+        with open(media_path, "rb") as f:
             result = client.audio.transcriptions.create(
                 model="whisper-large-v3",
-                file=("audio.wav", f),
+                file=(Path(media_path).name, f, "video/mp4"),
                 language="pt",
                 response_format="text",
             )
