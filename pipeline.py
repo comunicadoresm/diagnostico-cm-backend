@@ -158,22 +158,23 @@ def transcribe_audio(media_path: str) -> str:
     if not api_key:
         raise RuntimeError("GROQ_API_KEY não configurado nas variáveis de ambiente.")
 
-    file_size_mb = Path(media_path).stat().st_size / (1024 * 1024)
-    logger.info("Transcrevendo via Groq Whisper large-v3: %.1f MB", file_size_mb)
+    # Sempre extrai WAV antes de enviar ao Groq:
+    # - arquivo menor (~1-2MB vs 5-10MB do mp4)
+    # - formato sem ambiguidade (Groq reconhece melhor)
+    # - upload mais rápido pelo Railway
+    audio_path = str(Path(media_path).with_suffix(".wav"))
+    logger.info("Extraindo audio WAV para envio ao Groq...")
+    extract_audio(media_path, audio_path)
 
-    # Groq limite: 25MB. Se o vídeo for maior, extrai áudio WAV antes.
-    transcribe_path = media_path
-    if file_size_mb > 24:
-        audio_path = str(Path(media_path).with_suffix(".wav"))
-        extract_audio(media_path, audio_path)
-        transcribe_path = audio_path
+    wav_size_mb = Path(audio_path).stat().st_size / (1024 * 1024)
+    logger.info("Enviando %.1f MB ao Groq Whisper large-v3...", wav_size_mb)
 
     try:
-        client = Groq(api_key=api_key)
-        with open(transcribe_path, "rb") as f:
+        client = Groq(api_key=api_key, timeout=120.0)
+        with open(audio_path, "rb") as f:
             result = client.audio.transcriptions.create(
                 model="whisper-large-v3",
-                file=f,
+                file=("audio.wav", f),
                 language="pt",
                 response_format="text",
             )
