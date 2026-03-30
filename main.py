@@ -216,6 +216,7 @@ async def save_contact(request: SaveContactRequest):
                 name=request.name or "",
                 whatsapp=request.whatsapp,
                 tags=["diagnostico_iniciado"],
+                list_id=os.getenv("ACTIVECAMPAIGN_LIST_ID"),
             )
         )
 
@@ -230,10 +231,31 @@ async def save_contact(request: SaveContactRequest):
 
 @app.post("/save/quiz", tags=["Quiz"])
 async def save_quiz(request: SaveQuizRequest):
-    """Salva respostas do quiz associadas à sessão."""
+    """Salva respostas do quiz no Supabase e envia para o ActiveCampaign."""
     logger.info("Salvando quiz para session_id=%s (%d respostas)", request.session_id, len(request.answers))
     try:
         supabase_client.save_quiz_answers(request.session_id, request.answers)
+
+        # Envia respostas ao ActiveCampaign (fire-and-forget)
+        import asyncio
+        session_data = supabase_client.get_session(request.session_id)
+        lead_email = session_data.get("email", "")
+        if lead_email:
+            # Mapeia respostas para os IDs dos campos no AC
+            # IDs: Quiz Resposta 1=285, Quiz Resposta 2=286, Quiz Resposta 3=287
+            ac_fields = {}
+            for i, ans in enumerate(request.answers[:3]):
+                field_id = str(285 + i)
+                ac_fields[field_id] = ans.get("answer", "")
+
+            asyncio.create_task(
+                activecampaign.upsert_contact(
+                    email=lead_email,
+                    custom_fields=ac_fields,
+                )
+            )
+            logger.info("Respostas do quiz enviadas ao AC para %s", lead_email)
+
         return {"ok": True, "saved": len(request.answers)}
     except Exception as e:
         logger.error("Erro ao salvar quiz para session %s: %s", request.session_id, e, exc_info=True)

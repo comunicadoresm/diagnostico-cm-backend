@@ -309,10 +309,9 @@ def run_video_pipeline(
                     whatsapp=lead_whatsapp,
                     tags=["diagnostico_concluido"],
                     custom_fields={
-                        "score_total": int(total_score),
-                        "principal_gap": video_score_data.get("principal_gap", ""),
-                        "nivel_alerta": nivel_alerta,
-                        "username_ig": username,
+                        "284": int(total_score),       # Score Total
+                        "283": video_score_data.get("principal_gap", ""),  # Gap Principal
+                        "282": username,               # Username IG
                     },
                 )
             )

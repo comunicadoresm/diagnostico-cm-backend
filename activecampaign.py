@@ -18,6 +18,7 @@ async def upsert_contact(
     whatsapp: str = "",
     tags: list[str] = None,
     custom_fields: dict = None,
+    list_id: str = None,
 ) -> str | None:
     """Cria ou atualiza contato no ActiveCampaign, adiciona tags e custom fields.
 
@@ -94,6 +95,18 @@ async def upsert_contact(
                     )
                 except Exception as field_err:
                     logger.warning("Falha ao atualizar field %s: %s", field_id, field_err)
+
+            # 4. Adicionar à lista
+            if list_id:
+                try:
+                    await client.post(
+                        f"{AC_URL}/api/3/contactLists",
+                        json={"contactList": {"list": list_id, "contact": contact_id, "status": 1}},
+                        headers=headers,
+                    )
+                    logger.info("Contato %s adicionado à lista %s", contact_id, list_id)
+                except Exception as list_err:
+                    logger.warning("Falha ao adicionar contato à lista %s: %s", list_id, list_err)
 
             return str(contact_id)
 
