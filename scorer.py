@@ -21,21 +21,22 @@ def _parse_json_response(raw_text: str) -> dict:
     """Extrai e faz parse do JSON da resposta do Claude.
     Tolerante a code fences e texto extra antes/depois do JSON.
     """
-    import re
     text = raw_text.strip()
 
-    # Remove code fences se presentes (```json...``` ou ```...```)
-    fence_match = re.search(r"```(?:json)?\s*([\s\S]*?)```", text)
-    if fence_match:
-        text = fence_match.group(1).strip()
+    # Extrai conteúdo entre code fences se presentes
+    if "```" in text:
+        import re
+        fence_match = re.search(r"```(?:json)?\s*([\s\S]*?)```", text)
+        if fence_match:
+            text = fence_match.group(1).strip()
 
-    # Usa raw_decode: extrai apenas o primeiro objeto JSON, ignora texto extra
-    decoder = json.JSONDecoder()
-    start = text.find("{")
-    if start == -1:
+    # Corta do primeiro { até o último } para eliminar texto extra
+    first = text.find("{")
+    last = text.rfind("}")
+    if first == -1 or last == -1 or last <= first:
         raise json.JSONDecodeError("Nenhum objeto JSON encontrado", text, 0)
-    obj, _ = decoder.raw_decode(text, start)
-    return obj
+
+    return json.loads(text[first : last + 1])
 
 
 def score_profile(username: str, profile_data: dict) -> dict:
