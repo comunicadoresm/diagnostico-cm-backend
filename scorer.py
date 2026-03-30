@@ -269,8 +269,8 @@ Retorne APENAS um JSON válido neste formato:
     raw_text = ""
     try:
         response = client.messages.create(
-            model="claude-sonnet-4-6",
-            max_tokens=2048,
+            model="claude-haiku-4-5-20251001",
+            max_tokens=1500,
             messages=[{"role": "user", "content": prompt}],
         )
         raw_text = response.content[0].text
