@@ -66,52 +66,9 @@ logger.info("CORS configurado para origens: %s", _origins_list)
 
 @app.get("/health", tags=["Status"])
 async def health_check():
-    return {"status": "ok", "version": "groq-v2"}
+    return {"status": "ok"}
 
 
-@app.post("/debug/score-video", tags=["Status"])
-def debug_score_video(request: dict):
-    """Testa score_video diretamente — remover após diagnóstico."""
-    transcricao = request.get("transcricao", "Teste de transcrição mínima.")
-    try:
-        result = scorer.score_video(transcricao, {})
-        return {"ok": True, "result": result}
-    except Exception as e:
-        return {"ok": False, "error_type": type(e).__name__, "error": str(e)[:1000]}
-
-
-@app.get("/debug/groq", tags=["Status"])
-def debug_groq():
-    """Testa conectividade com Groq API — remover após diagnóstico."""
-    import struct
-    from groq import Groq
-
-    key = os.getenv("GROQ_API_KEY", "")
-    if not key:
-        return {"key_set": False, "error": "GROQ_API_KEY não configurado"}
-
-    # WAV mínimo: 1 segundo de silêncio a 16kHz mono 16-bit
-    sample_rate, n_samples = 16000, 16000
-    wav_header = struct.pack(
-        "<4sI4s4sIHHIIHH4sI",
-        b"RIFF", 36 + n_samples * 2, b"WAVE",
-        b"fmt ", 16, 1, 1, sample_rate, sample_rate * 2, 2, 16,
-        b"data", n_samples * 2,
-    )
-    silence_wav = wav_header + bytes(n_samples * 2)
-
-    try:
-        client = Groq(api_key=key, timeout=30.0)
-        result = client.audio.transcriptions.create(
-            model="whisper-large-v3",
-            file=("silence.wav", silence_wav, "audio/wav"),
-            language="pt",
-            response_format="text",
-        )
-        text = result if isinstance(result, str) else getattr(result, "text", "")
-        return {"key_set": True, "groq_accessible": True, "transcription": text}
-    except Exception as e:
-        return {"key_set": True, "groq_accessible": False, "error": str(e)}
 
 
 @app.post("/analyze/profile", tags=["Analise"])
