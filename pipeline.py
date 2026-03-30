@@ -331,12 +331,12 @@ def run_video_pipeline(
     except Exception as e:
         logger.error("[%s] Erro no pipeline: %s", session_id, e, exc_info=True)
         try:
-            # Atualiza apenas colunas que existem na schema base (status + completed_at)
             supabase_client.update_session(
                 session_id,
                 {
                     "status": "error",
                     "completed_at": datetime.now(timezone.utc).isoformat(),
+                    "error_message": str(e)[:500],
                 },
             )
             # Campos opcionais atualizados separadamente (tolerante a falha)
