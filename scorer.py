@@ -270,7 +270,7 @@ Retorne APENAS um JSON válido neste formato:
     try:
         response = client.messages.create(
             model="claude-haiku-4-5-20251001",
-            max_tokens=1500,
+            max_tokens=4096,
             messages=[{"role": "user", "content": prompt}],
         )
         raw_text = response.content[0].text
