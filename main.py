@@ -73,8 +73,11 @@ async def health_check():
 def debug_score_video(request: dict):
     """Testa score_video diretamente — remover após diagnóstico."""
     transcricao = request.get("transcricao", "Teste de transcrição mínima.")
-    result = scorer.score_video(transcricao, {})
-    return result
+    try:
+        result = scorer.score_video(transcricao, {})
+        return {"ok": True, "result": result}
+    except Exception as e:
+        return {"ok": False, "error_type": type(e).__name__, "error": str(e)[:1000]}
 
 
 @app.get("/debug/groq", tags=["Status"])
