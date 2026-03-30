@@ -18,12 +18,24 @@ def _get_client() -> anthropic.Anthropic:
 
 
 def _parse_json_response(raw_text: str) -> dict:
-    """Remove markdown code fences e faz parse do JSON."""
+    """Extrai e faz parse do JSON da resposta do Claude.
+    Tolerante a code fences e texto extra antes/depois do JSON.
+    """
+    import re
     text = raw_text.strip()
-    if text.startswith("```"):
-        lines = text.split("\n")
-        text = "\n".join(lines[1:-1]) if lines[-1].strip() == "```" else "\n".join(lines[1:])
-    return json.loads(text)
+
+    # Remove code fences se presentes (```json...``` ou ```...```)
+    fence_match = re.search(r"```(?:json)?\s*([\s\S]*?)```", text)
+    if fence_match:
+        text = fence_match.group(1).strip()
+
+    # Usa raw_decode: extrai apenas o primeiro objeto JSON, ignora texto extra
+    decoder = json.JSONDecoder()
+    start = text.find("{")
+    if start == -1:
+        raise json.JSONDecodeError("Nenhum objeto JSON encontrado", text, 0)
+    obj, _ = decoder.raw_decode(text, start)
+    return obj
 
 
 def score_profile(username: str, profile_data: dict) -> dict:
