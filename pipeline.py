@@ -239,7 +239,10 @@ def run_video_pipeline(
 
         # 5. Score do video (metodologia IDF GB)
         supabase_client.update_status_detail(session_id, "calculando_score")
-        video_score_data = scorer.score_video(transcricao, profile_score_data)
+        try:
+            video_score_data = scorer.score_video(transcricao, profile_score_data)
+        except Exception as e:
+            raise RuntimeError(f"STEP_score_video: {type(e).__name__}: {e}")
 
         # 6. Score total ponderado: perfil 40% + video 60%
         profile_score = profile_score_data.get("total_profile_score", 0) if profile_score_data else 0
@@ -262,7 +265,8 @@ def run_video_pipeline(
             session_id, profile_score, video_avg, total_score, nivel_alerta,
         )
 
-        # 7. Montar payload para Supabase
+        # 7. Salvar resultado no Supabase
+        supabase_client.update_status_detail(session_id, "salvando_resultado")
         now = datetime.now(timezone.utc).isoformat()
         update_payload = {
             "status": "completed",
@@ -276,7 +280,11 @@ def run_video_pipeline(
             "headline_diagnostico": headline_diagnostico,
         }
 
-        supabase_client.update_session(session_id, update_payload)
+        try:
+            supabase_client.update_session(session_id, update_payload)
+        except Exception as e:
+            raise RuntimeError(f"STEP_supabase_update: {type(e).__name__}: {e}")
+
         logger.info("[%s] Supabase atualizado com sucesso.", session_id)
 
         # 8. Buscar dados do lead para AC e WhatsApp
@@ -336,7 +344,7 @@ def run_video_pipeline(
                 {
                     "status": "error",
                     "completed_at": datetime.now(timezone.utc).isoformat(),
-                    "error_message": str(e)[:500],
+                    "error_message": (str(e) or f"{type(e).__name__}")[:500],
                 },
             )
             # Campos opcionais atualizados separadamente (tolerante a falha)
