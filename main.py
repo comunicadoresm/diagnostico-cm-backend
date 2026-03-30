@@ -3,8 +3,10 @@ import os
 import uuid
 
 from dotenv import load_dotenv
-from fastapi import BackgroundTasks, FastAPI, HTTPException
+from fastapi import BackgroundTasks, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response
+import httpx
 
 import activecampaign
 import instagram
@@ -67,6 +69,32 @@ logger.info("CORS configurado para origens: %s", _origins_list)
 @app.get("/health", tags=["Status"])
 async def health_check():
     return {"status": "ok"}
+
+
+@app.get("/proxy/image", tags=["Proxy"])
+async def proxy_image(url: str = Query(..., description="URL da imagem do CDN do Instagram")):
+    """Proxy para imagens do CDN do Instagram. Contorna bloqueio de Referrer."""
+    _ALLOWED_HOSTS = ("cdninstagram.com", "instagram.com", "fbcdn.net", "scontent")
+    if not any(h in url for h in _ALLOWED_HOSTS):
+        raise HTTPException(status_code=400, detail="URL não permitida.")
+
+    headers = {
+        "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15",
+        "Referer": "https://www.instagram.com/",
+        "Accept": "image/webp,image/apng,image/*,*/*;q=0.8",
+    }
+    try:
+        async with httpx.AsyncClient(timeout=15, follow_redirects=True) as client:
+            resp = await client.get(url, headers=headers)
+        if resp.status_code != 200:
+            raise HTTPException(status_code=502, detail="Falha ao buscar imagem.")
+        content_type = resp.headers.get("content-type", "image/jpeg")
+        return Response(content=resp.content, media_type=content_type)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Erro no proxy de imagem: %s", e)
+        raise HTTPException(status_code=502, detail="Erro ao buscar imagem.")
 
 
 
