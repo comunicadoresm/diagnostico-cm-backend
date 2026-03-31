@@ -198,6 +198,7 @@ def get_profile(username: str) -> dict:
     )
 
     highlights_count = _first_int(
+        profile.get("highlightReelCount"),
         profile.get("highlightsCount"),
         profile.get("highlights_count"),
     )
@@ -224,13 +225,13 @@ def get_profile(username: str) -> dict:
 
 
 def get_posts(username: str) -> list:
-    """Coleta os ultimos 9 posts publicos do perfil via Apify.
+    """Coleta os ultimos 9 reels publicos do perfil via Apify (apenas videos).
 
     Args:
         username: Nome de usuario (com ou sem '@').
 
     Returns:
-        Lista de dicts com informacoes de cada post.
+        Lista de dicts com informacoes de cada reel (apenas videos).
 
     Raises:
         HTTPException 400: Username invalido.
@@ -243,42 +244,60 @@ def get_posts(username: str) -> list:
     if not username:
         raise HTTPException(status_code=400, detail="Username nao pode ser vazio.")
 
-    logger.info("Buscando posts de @%s via Apify", username)
+    logger.info("Buscando reels de @%s via Apify", username)
 
+    # Busca 30 posts para garantir 9 reels mesmo em perfis com muitas fotos
     items = _apify_run_sync(
         actor_id="apify~instagram-scraper",
         input_data={
             "directUrls": [f"https://www.instagram.com/{username}/"],
             "resultsType": "posts",
-            "resultsLimit": 9,
+            "resultsLimit": 30,
         },
     )
 
-    posts = []
-    for item in items[:9]:
+    reels = []
+    for item in items:
+        if len(reels) >= 9:
+            break
         try:
-            caption = item.get("caption") or item.get("alt", "") or ""
-            caption_preview = caption[:100] if caption else ""
+            is_video = (
+                item.get("type") == "Video"
+                or item.get("isVideo") is True
+                or item.get("is_video") is True
+                or item.get("productType") in ("clips", "igtv")
+            )
+            if not is_video:
+                continue
 
-            is_video = item.get("type") == "Video" or item.get("isVideo") or item.get("is_video", False)
             shortcode = item.get("shortCode") or item.get("shortcode", "")
+            caption = item.get("caption") or item.get("alt", "") or ""
             timestamp = item.get("timestamp") or item.get("takenAtTimestamp") or item.get("date")
 
-            post_data = {
+            views = (
+                item.get("videoPlayCount")
+                or item.get("videoViewCount")
+                or item.get("playsCount")
+                or item.get("plays")
+                or item.get("views")
+                or 0
+            )
+
+            reels.append({
                 "shortcode": shortcode,
-                "is_video": is_video,
+                "is_video": True,
                 "thumbnail_url": item.get("displayUrl") or item.get("thumbnailUrl") or item.get("url", ""),
-                "likes": item.get("likesCount") or item.get("likes", 0),
-                "comments": item.get("commentsCount") or item.get("comments", 0),
+                "likes": item.get("likesCount") or item.get("likes") or 0,
+                "comments": item.get("commentsCount") or item.get("comments") or 0,
                 "date": timestamp,
-                "caption_preview": caption_preview,
-                "video_url": item.get("videoUrl") if is_video else None,
-                "views": item.get("videoViewCount") or item.get("views") if is_video else None,
-            }
-            posts.append(post_data)
+                "caption_preview": caption[:100],
+                "video_url": item.get("videoUrl"),
+                "views": views,
+            })
 
         except Exception as e:
-            logger.warning("Erro ao processar post: %s", e)
+            logger.warning("Erro ao processar reel: %s", e)
             continue
 
-    return posts
+    logger.info("Reels encontrados para @%s: %d", username, len(reels))
+    return reels
