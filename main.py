@@ -115,8 +115,21 @@ async def analyze_profile(request: ProfileRequest):
 async def analyze_profile_score(request: ProfileScoreRequest):
     logger.info("Requisicao de score de perfil: @%s", request.username)
     try:
-        highlight_titles = instagram.get_highlight_titles(request.username)
-        return scorer.score_profile(request.username, request.profile_data, highlight_titles)
+        import asyncio
+
+        # Busca títulos dos destaques com timeout de 5s — não bloqueia se Apify demorar
+        try:
+            highlight_titles = await asyncio.wait_for(
+                asyncio.to_thread(instagram.get_highlight_titles, request.username),
+                timeout=5.0,
+            )
+        except asyncio.TimeoutError:
+            logger.warning("Timeout ao buscar titulos de destaques para @%s — continuando sem", request.username)
+            highlight_titles = []
+
+        return await asyncio.to_thread(
+            scorer.score_profile, request.username, request.profile_data, highlight_titles
+        )
     except HTTPException:
         raise
     except RuntimeError as e:
