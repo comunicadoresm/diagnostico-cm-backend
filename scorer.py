@@ -276,7 +276,10 @@ Retorne APENAS um JSON válido neste formato:
   "proximo_passo": "Ação específica e cirúrgica com urgência. Ex: Reescreva o gancho AGORA como afirmação: em vez de 'Você já tentou...' (que faz o espectador desengajar imediatamente), use 'Toda pessoa que tenta X sem Y está cometendo o erro que ninguém fala.'",
 
   "nivel_alerta": "critico | importante | atencao",
-  "headline_diagnostico": "Frase curta e impactante com viés negativo para exibir no topo do relatório. Exemplos: 'Encontramos 3 erros críticos que estão sabotando seu perfil' | 'Seu gancho está expulsando seguidores antes de 3 segundos' | 'Identificamos gaps importantes que estão custando vendas' | 'Atenção: seu conteúdo tem potencial, mas esses ajustes são urgentes'. Use sempre tom de alerta — nunca elogioso."
+  "headline_diagnostico": "Frase curta e impactante com viés negativo para exibir no topo do relatório. Exemplos: 'Encontramos 3 erros críticos que estão sabotando seu perfil' | 'Seu gancho está expulsando seguidores antes de 3 segundos' | 'Identificamos gaps importantes que estão custando vendas' | 'Atenção: seu conteúdo tem potencial, mas esses ajustes são urgentes'. Use sempre tom de alerta — nunca elogioso.",
+
+  "resumo_positivo": "1 frase direta sobre o maior ponto forte do vídeo com base na metodologia IDF. Ex: 'Sua virada no D2 é real e bem construída — cria tensão genuína antes de entregar o valor.' Máximo 2 linhas, linguagem direta, sem elogios genéricos.",
+  "resumo_melhoria": "1 frase direta sobre o ajuste mais urgente com base na metodologia IDF. Ex: 'Seu gancho é uma pergunta direta — isso expulsa o espectador antes de 3 segundos e precisa virar afirmação imediatamente.' Máximo 2 linhas, tom de urgência, cite o elemento específico (gancho, D2, CTA etc)."
 }}"""
 
     raw_text = ""
