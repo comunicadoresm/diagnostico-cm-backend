@@ -255,10 +255,18 @@ def run_video_pipeline(
         ]
         video_avg = sum(video_dimensions) / len(video_dimensions) if video_dimensions else 0
         total_score = round((profile_score / 8 * 40) + (video_avg / 10 * 60), 1)
-        score_label = _calcular_score_label(total_score)
 
         nivel_alerta = video_score_data.get("nivel_alerta", "importante")
         headline_diagnostico = video_score_data.get("headline_diagnostico", "Seu diagnóstico está pronto")
+
+        # Gerar score_label personalizado com base no quiz + scores
+        quiz_answers = supabase_client.get_quiz_answers(session_id)
+        score_label = scorer.generate_score_label(
+            quiz_answers=quiz_answers,
+            total_score=total_score,
+            profile_score_data=profile_score_data,
+            video_score_data=video_score_data,
+        )
 
         logger.info(
             "[%s] Scores — perfil: %s/8, video_avg: %.1f/10, total: %.1f/100, nivel: %s",

@@ -89,6 +89,18 @@ def get_quiz_questions() -> list[dict]:
     return response.data or []
 
 
+def get_quiz_answers(session_id: str) -> list[dict]:
+    """Retorna as respostas do quiz de uma sessão."""
+    client = get_client()
+    response = (
+        client.table("quiz_answers")
+        .select("*")
+        .eq("session_id", session_id)
+        .execute()
+    )
+    return response.data or []
+
+
 def save_quiz_answers(session_id: str, answers: list[dict]) -> None:
     """Salva respostas do quiz na tabela quiz_answers.
 

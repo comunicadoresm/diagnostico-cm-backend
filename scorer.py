@@ -165,6 +165,84 @@ Inclua também:
         raise RuntimeError(f"Erro na API Claude: {str(e)}")
 
 
+def generate_score_label(
+    quiz_answers: list[dict],
+    total_score: float,
+    profile_score_data: dict,
+    video_score_data: dict,
+) -> str:
+    """Gera uma frase personalizada baseada nas respostas do quiz e nos scores.
+
+    Usa a linguagem da Giullya Becker para conectar a dificuldade do lead
+    com seu objetivo e o que o diagnóstico revelou.
+
+    Returns:
+        Frase personalizada de 1-2 linhas. Fallback para frase fixa se falhar.
+    """
+    client = _get_client()
+
+    # Montar contexto do quiz
+    quiz_text = "\n".join(
+        f"- {a.get('question_text', '')}: {a.get('answer', '')}"
+        for a in quiz_answers
+        if a.get("answer")
+    ) or "Respostas não disponíveis."
+
+    principal_gap = video_score_data.get("principal_gap", "") if video_score_data else ""
+    gancho_score = video_score_data.get("gancho_score", 0) if video_score_data else 0
+    bio_score = profile_score_data.get("bio", {}).get("score", 0) if profile_score_data else 0
+
+    prompt = f"""Você é o Diagnóstico Magnético — criado pela Giullya Becker (Comunicadores Magnéticos).
+
+Gere UMA frase curta e personalizada para exibir no relatório de diagnóstico desta pessoa.
+
+DADOS DO LEAD:
+Respostas do quiz:
+{quiz_text}
+
+Score total: {total_score}/100
+Score da bio: {bio_score}/3
+Score do gancho: {gancho_score}/10
+Principal gap identificado: {principal_gap}
+
+REGRAS DA FRASE:
+- Máximo 2 linhas curtas
+- Mencione a maior dificuldade que a pessoa respondeu no quiz
+- Conecte com o que o diagnóstico encontrou (gap real)
+- Termine apontando o que ela precisa mudar para alcançar o objetivo que ela respondeu
+- Use linguagem direta, sem rodeios, com senso de urgência real
+- Estilo Giullya Becker: empática mas provocativa, sem suavizar o problema
+- NUNCA use palavras como "incrível", "fantástico", "parabéns"
+- Fale na segunda pessoa ("Você está...", "Seu conteúdo...", "Isso está te custando...")
+
+EXEMPLOS DO TOM CERTO:
+- "Você quer vender mais, mas seu gancho está expulsando as pessoas antes de 3 segundos. Isso não é falta de talento — é técnica."
+- "Sua maior dificuldade é engajamento, e o diagnóstico mostrou o porquê: seu CTA não pede nada do jeito certo."
+- "Você quer crescer, mas sua bio não diz o que você vende. Quem chega no seu perfil não entende o que você faz."
+
+Retorne APENAS a frase, sem aspas, sem explicação."""
+
+    try:
+        response = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=150,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        label = response.content[0].text.strip()
+        logger.info("Score label gerado: %s", label)
+        return label
+    except Exception as e:
+        logger.warning("Falha ao gerar score label personalizado: %s", e)
+        # Fallback para frase fixa baseada no score
+        if total_score <= 40:
+            return "Perfil precisa de reestruturação completa"
+        elif total_score <= 65:
+            return "Perfil com potencial, perdendo vendas por gaps no conteúdo"
+        elif total_score <= 85:
+            return "Perfil bom — ajustes pontuais fariam grande diferença"
+        return "Perfil bem otimizado — hora de escalar"
+
+
 def score_video(transcricao: str, profile_score_data: dict) -> dict:
     """Avalia o roteiro do video usando a metodologia IDF real dos Comunicadores Magnéticos.
 
