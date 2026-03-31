@@ -99,7 +99,11 @@ Retorne APENAS um JSON válido neste formato:
   "total_profile_score": 7
 }}
 
-Onde bio_score = soma dos 3 itens de bio (max 3), foto_score = soma dos 2 itens de foto (max 2), destaques_score = soma dos 3 itens de destaques (max 3), total_profile_score = soma de todos (max 8)."""
+Onde bio_score = soma dos 3 itens de bio (max 3), foto_score = soma dos 2 itens de foto (max 2), destaques_score = soma dos 3 itens de destaques (max 3), total_profile_score = soma de todos (max 8).
+
+Inclua também:
+- "resumo_positivo": 1 frase direta sobre o maior ponto forte do perfil com base nos critérios acima. Ex: "Sua bio comunica claramente quem você é e o que vende — isso já filtra e atrai o público certo." Máximo 2 linhas, sem elogios genéricos.
+- "resumo_melhoria": 1 frase direta sobre o ajuste mais urgente no perfil. Ex: "Você não tem link na bio — isso corta o caminho do seguidor até a sua oferta e precisa ser corrigido hoje." Máximo 2 linhas, tom de urgência, cite o elemento específico (bio, foto ou destaques)."""
 
     raw_text = ""
     try:
@@ -132,6 +136,8 @@ Onde bio_score = soma dos 3 itens de bio (max 3), foto_score = soma dos 2 itens 
             },
             "total_profile_score": result.get("total_profile_score", 0),
             "max_profile_score": 8,
+            "resumo_positivo": result.get("resumo_positivo", ""),
+            "resumo_melhoria": result.get("resumo_melhoria", ""),
         }
 
         logger.info("Score de perfil calculado para @%s: %s/8", username, structured["total_profile_score"])
@@ -276,10 +282,7 @@ Retorne APENAS um JSON válido neste formato:
   "proximo_passo": "Ação específica e cirúrgica com urgência. Ex: Reescreva o gancho AGORA como afirmação: em vez de 'Você já tentou...' (que faz o espectador desengajar imediatamente), use 'Toda pessoa que tenta X sem Y está cometendo o erro que ninguém fala.'",
 
   "nivel_alerta": "critico | importante | atencao",
-  "headline_diagnostico": "Frase curta e impactante com viés negativo para exibir no topo do relatório. Exemplos: 'Encontramos 3 erros críticos que estão sabotando seu perfil' | 'Seu gancho está expulsando seguidores antes de 3 segundos' | 'Identificamos gaps importantes que estão custando vendas' | 'Atenção: seu conteúdo tem potencial, mas esses ajustes são urgentes'. Use sempre tom de alerta — nunca elogioso.",
-
-  "resumo_positivo": "1 frase direta sobre o maior ponto forte do vídeo com base na metodologia IDF. Ex: 'Sua virada no D2 é real e bem construída — cria tensão genuína antes de entregar o valor.' Máximo 2 linhas, linguagem direta, sem elogios genéricos.",
-  "resumo_melhoria": "1 frase direta sobre o ajuste mais urgente com base na metodologia IDF. Ex: 'Seu gancho é uma pergunta direta — isso expulsa o espectador antes de 3 segundos e precisa virar afirmação imediatamente.' Máximo 2 linhas, tom de urgência, cite o elemento específico (gancho, D2, CTA etc)."
+  "headline_diagnostico": "Frase curta e impactante com viés negativo para exibir no topo do relatório. Exemplos: 'Encontramos 3 erros críticos que estão sabotando seu perfil' | 'Seu gancho está expulsando seguidores antes de 3 segundos' | 'Identificamos gaps importantes que estão custando vendas' | 'Atenção: seu conteúdo tem potencial, mas esses ajustes são urgentes'. Use sempre tom de alerta — nunca elogioso."
 }}"""
 
     raw_text = ""
