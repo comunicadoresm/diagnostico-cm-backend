@@ -224,6 +224,43 @@ def get_profile(username: str) -> dict:
     return result
 
 
+def get_highlight_titles(username: str) -> list[str]:
+    """Busca os títulos dos destaques do perfil via Apify.
+
+    Tenta duas estratégias: stories do perfil e scraping direto.
+    Retorna lista vazia se não conseguir (sem lançar exceção).
+    """
+    username = username.lstrip("@").strip()
+    try:
+        items = _apify_run_sync(
+            actor_id="apify~instagram-scraper",
+            input_data={
+                "directUrls": [f"https://www.instagram.com/{username}/"],
+                "resultsType": "stories",
+                "resultsLimit": 30,
+            },
+        )
+
+        titles = []
+        for item in items:
+            title = (
+                item.get("highlightTitle")
+                or item.get("title")
+                or item.get("name")
+                or item.get("highlight_title")
+                or item.get("storyTitle")
+            )
+            if title and title not in titles:
+                titles.append(str(title))
+
+        logger.info("Titulos de destaques para @%s: %s", username, titles)
+        return titles
+
+    except Exception as e:
+        logger.warning("Nao foi possivel buscar titulos de destaques para @%s: %s", username, e)
+        return []
+
+
 def get_posts(username: str) -> list:
     """Coleta os ultimos 9 reels publicos do perfil via Apify (apenas videos).
 

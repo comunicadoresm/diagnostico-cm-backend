@@ -39,7 +39,7 @@ def _parse_json_response(raw_text: str) -> dict:
     return json.loads(text[first : last + 1])
 
 
-def score_profile(username: str, profile_data: dict) -> dict:
+def score_profile(username: str, profile_data: dict, highlight_titles: list = None) -> dict:
     """Avalia o perfil do Instagram usando Claude e retorna scores estruturados.
 
     Args:
@@ -58,6 +58,12 @@ def score_profile(username: str, profile_data: dict) -> dict:
     external_url = profile_data.get("external_url", "")
     highlights_count = profile_data.get("highlights_count", 0)
     profile_pic_url = profile_data.get("profile_pic_url", "")
+    highlight_titles = highlight_titles or []
+
+    if highlight_titles:
+        highlights_titles_text = ", ".join(f'"{t}"' for t in highlight_titles)
+    else:
+        highlights_titles_text = "Títulos não disponíveis — avalie de forma conservadora"
 
     prompt = f"""Analise o perfil do Instagram abaixo e retorne uma avaliação em JSON.
 
@@ -79,9 +85,16 @@ FOTO (analise a URL da foto de perfil se possível):
 5. foto_thumbnail: A descrição sugere que seria reconhecível em tamanho pequeno?
 
 DESTAQUES:
-6. destaques_existem: Há pelo menos 1 destaque? ({highlights_count} > 0)
-7. destaques_organizados: Com {highlights_count} destaques, parece organizado?
-8. destaques_negocio: Algum destaque provavelmente comunica o que vende ou quem é?
+6. destaques_existem: Há pelo menos 1 destaque? ({highlights_count} encontrados)
+7. destaques_organizados: Com base nos títulos abaixo, os destaques parecem organizados e com propósito claro?
+8. destaques_negocio: Com base nos títulos abaixo, algum destaque comunica o que a pessoa vende, faz ou quem é?
+
+TÍTULOS DOS DESTAQUES: {highlights_titles_text}
+
+IMPORTANTE para destaques_organizados e destaques_negocio:
+- Se os títulos forem genéricos (ex: "Destaque 1", datas, emojis sem sentido) → false
+- Se os títulos não estiverem disponíveis → avalie de forma conservadora → false
+- Só marque true se os títulos claramente comunicarem identidade ou oferta
 
 Retorne APENAS um JSON válido neste formato:
 {{

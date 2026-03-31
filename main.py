@@ -115,7 +115,8 @@ async def analyze_profile(request: ProfileRequest):
 async def analyze_profile_score(request: ProfileScoreRequest):
     logger.info("Requisicao de score de perfil: @%s", request.username)
     try:
-        return scorer.score_profile(request.username, request.profile_data)
+        highlight_titles = instagram.get_highlight_titles(request.username)
+        return scorer.score_profile(request.username, request.profile_data, highlight_titles)
     except HTTPException:
         raise
     except RuntimeError as e:
